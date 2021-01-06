@@ -1,0 +1,92 @@
+---
+title: "HW2: Transforming and tidying maternal mortality data"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+Due on Thursday September 20, 2018, to submit via github (the HW2 link will be given).
+
+The maternal mortality ratio (MMR) is defined as the number of maternal deaths per 100,000 live births. The UN maternal mortality estimation group produces estimates of the MMR for all countries in the world. In this HW, we will use a subset of the (real) data that were used to generate the United Nations Maternal mortality estimates, as published in the year 2015. The datasets for this HW are available online, they are read in in the set-up chunk below. You need to be connected to the internet for this to work. 
+
+The data set mmrdat (defined in the set-up chunk below) contains maternal mortality information from a set of studies (studies may refer to the same country-year). Some studies report the MMR directly while others report a different measures, which is the PM. The PM is the proportion of all deaths to women of reproductive age that are maternal. The MMR and the PM are related as follows:
+
+MMR = PM $*$ deaths/births $*$ 100,000.
+
+For analyses, the MMR derived from the PM, using UN estimates of births and deaths for corresponding country-years, is usualy the preferred measure (i.e. to try to reduce the bias associated with underreporting of all deaths). UN estimates are also read in the first R chunk. 
+
+# Exercises:
+
+1. Add to the mmr dataset a new variable mmr_merge, that contains the MMRs as calculated from observed PMs where available (using UN estimates of births and deaths), otherwise the MMR as reported in the study is used. 
+
+Based on the extended dataset, exercises 2 and 3 are to create:
+
+2. a table with the average MMR (from MMR_merge) per country. Please save this tibble as the R object "table_exercise2", for us to try out automated grading.
+
+3. a graph with MMR (from mmr_merge) plotted against time using geom_point, for data from China and Thailand only (use different colors to distinguish between countries). 
+Optional: You get extra credit if you use shapes to distinguish between observations for which the MMR was observed directly, versus obtained from the PM, and provide a legend with that.
+
+On the moodle, I will post suggested steps to carry out exercise 1. However, it is a good exercise to first think for yourself what the steps would be and try it out, to only check the suggested steps if you get stuck (that's why the steps are not included in this notebook :) ). 
+
+
+```{r setup}
+library(tidyverse)
+# read in the data using this link (you need to be connected to the internet)
+mmrdat <- read_rds(gzcon(url("https://people.umass.edu/lalkema/mmr.rds")))
+# iso = country iso code, country =  country name, year = study year, mmr = observed mmr, pm = observed pm
+births <- read_rds(gzcon(url("https://people.umass.edu/lalkema/births.rds")))
+# iso = country iso code, the remaining columns provide the births for each year
+deaths <- read_rds(gzcon(url("https://people.umass.edu/lalkema/deaths.rds")))
+# iso = country iso code, the remaining columns provide the deaths for each year
+
+```
+
+Exercise 1
+To get to the end goal, the following steps work:
+
+* Transform the data set with information on deaths into a tidy data set with variables iso, year, deaths. 
+* Similarly, transform the data set with information on births into a tidy data set.
+* Merge the mmr database with the data sets on deaths and births, call this data_plus.
+* Add a new variable to data_plus called "mmr_from_pm", which is calculated from the pm using the equation given
+* Add mmr_merge that combines "mmr" and "mmr_from_pm" as follows: it takes the mmr_from_pm value when it is not missing, and the mmr value otherwise. HINT: one option is to use "ifelse(is.na(mmr_from_pm), .., ...)"
+
+```{r}
+tidy_births <- gather(births, key = "year", 
+                      value = "births", -1, convert = T)
+tidy_deaths <- gather(deaths, key = "year", 
+                      value = "deaths", -1, convert = T)
+```
+
+```{r}
+data_plus <- mmrdat %>%
+  left_join(tidy_births) %>% 
+  # names iso and year are automatically used
+  left_join(tidy_deaths) %>% 
+  mutate(mmr_from_pm = pm*deaths/births*10^5, 
+         mmr_merge  = ifelse(is.na(mmr_from_pm), mmr, mmr_from_pm),
+         imputed = ifelse(is.na(mmr_from_pm), 
+                          "mmr observed", "from pm")) 
+
+# just check some entries with pm not missing:
+data_plus %>%
+  filter(!is.na(pm))
+```
+
+```{r}
+table_exercise2 <- data_plus %>%
+  group_by(country) %>%
+  summarize(ave = round(mean(mmr_merge)))
+table_exercise2 
+```
+
+
+```{r}
+data_plus %>%
+  filter(country %in% c("China", "Thailand")) %>%
+  ggplot() +
+  geom_point(mapping = aes(x = year, y = mmr_merge, 
+                           col = country, shape =  imputed))
+
+```
+
+ 
