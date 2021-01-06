@@ -1,0 +1,110 @@
+---
+title: "HW3: Transforming and tidying prevalence data"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+Due on Friday September 28, 2018, to submit via github using this link:
+
+https://classroom.github.com/a/BZpoQMcd
+
+Note that the last exercise 3 is based on material that we haven't yet finished in class (hence the Fri deadline); we will go through it relatively quickly on Tu.
+
+
+The data set prevdat (defined in the set-up chunk below) contains information on prevalence of a disease on 10 populations from 1980 until 2017, stored as follows:
+
+* pop = index of the population, 10 unique ones in total. The coding is pop1 through pop10, combined with info on a grouping (A or B)
+
+* year = observation year
+
+* indicator = prevalence or population 
+
+* value = gives pop size when indicator == population, prevalence (in %) otherwise
+NOTE: if prevalence is missing for a population-year, this means that it is equal to zero. 
+
+# Exercise:
+
+1. per year, calculate prevalence for the 10 populations combined, taking into account the varying population sizes across populations. Store your output as a tibble called "exercise1" with columns year and tot_prevalence.
+Note: you will need to take into account that missing population-prevalence-years have zero prevalence. 
+2. Calculate prevalence for groupings A and B and create a line graph that shows the prevalence over time for both groupings.
+
+3. Not based on prevdat:
+Using gss_cat, summarize mean tv hours by marital group as in the graph as shown on the next page. 
+
+
+```{r setup}
+library(tidyverse)
+# read in the data using this link (you need to be connected to the internet)
+prevdat <- read_rds(gzcon(url("https://people.umass.edu/lalkema/prevdat_hw3.rds")))
+```
+
+
+
+```{r}
+#Exercise1
+ exercise1 <- prevdat %>%
+  spread(indicator,value) %>%
+  drop_na(prevalence) %>%
+  group_by(year) %>%
+  summarise(tot_prevalence=sum(popsize*prevalence)/sum(popsize))
+ #group_by(pop,year) %>%
+  #summarise(tot=sum(popsize),tot_prevalence=sum(prevalence*popsize)/tot) %>%
+  #ungroup() %>%
+  #select(year,tot_prevalence)
+ 
+
+
+#ggplot(exercise1)+geom_line(aes(year,tot_prevalence))
+ 
+```
+
+```{r}
+#Exercise2
+ totA <- prevdat %>%
+  spread(indicator,value) %>%
+  drop_na(prevalence) %>%
+  mutate(newline= str_sub(pop,-1)) %>%
+spread(newline,pop) %>%
+  group_by(year,A) %>%
+  drop_na(A) %>%
+  summarise(totA_prevalence=sum(popsize*prevalence)/sum(popsize)) %>%
+  group_by(year) %>%
+  summarise(totA_prevalence = mean(totA_prevalence))
+  
+  
+totB <- prevdat %>%
+  spread(indicator,value) %>%
+  drop_na(prevalence) %>%
+  mutate(newline= str_sub(pop,-1)) %>%
+spread(newline,pop) %>%
+  group_by(year,B) %>%
+  drop_na(B) %>%
+  summarise(totB_prevalence=sum(popsize*prevalence)/sum(popsize)) %>%
+  group_by(year) %>%
+  summarise(totB_prevalence=mean(totB_prevalence))
+  
+ 
+  
+tot <- totA %>%
+left_join(totB,by = "year") 
+  ggplot(tot)+geom_line(aes(year,totA_prevalence),color="blue")+geom_line(aes(year,totB_prevalence),color="red")+ylab("GroupA(BLUE)--GroupB(RED)")
+```
+
+
+
+
+```{r}
+#Exercise3
+gss_cat %>%
+  drop_na(tvhours) %>%
+  mutate(marital = marital %>%
+           fct_collapse( Married=c("Married","Widowed","Separated"),Notmarried=c("Divorced","Never married") ) %>%
+  fct_lump("No answer")
+  ) %>%
+  group_by(marital) %>%
+  summarise(tvhours=mean(tvhours))  %>%
+ ggplot(aes(x =fct_reorder(marital,tvhours,desc=FALSE) , y = tvhours)) + geom_col() +xlab("Marital status")+coord_flip()
+
+```
+
